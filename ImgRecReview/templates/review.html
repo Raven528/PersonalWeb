@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图像评审</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .image-container {
+            text-align: center;
+            margin-top: 50px;
+        }
+        img {
+            max-width: 80%;
+            height: auto;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        .input-box {
+            display: none;
+            margin-top: 20px;
+        }
+        .image-name {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="image-container">
+        <div>
+            <button onclick="handleCorrect()">正确</button>
+            <button onclick="handleIncorrect()">错误</button>
+            <button onclick="goBack()">回退</button>
+            <button onclick="exitReview()">退出</button>
+        </div>
+
+        <div id="image-wrapper" class="image-wrapper">
+            <div id="image-name" class="image-name"></div>
+            <img id="image" src="" alt="图像">
+        </div>
+
+        <div class="input-box" id="input-box">
+            <label for="user-input">请输入您的反馈：</label>
+            <input type="text" id="user-input" name="user-input">
+            <button onclick="submitInput()">提交</button>
+        </div>
+    </div>
+
+    <script>
+        let currentIndex = 0;
+        let images = [];
+        let judgments = {};  // 用于保存每个图像的判断状态
+
+        async function fetchImages() {
+            const response = await fetch('/get_images');
+            images = await response.json();
+            loadProgress();
+            showImage(currentIndex);
+        }
+
+        function showImage(index) {
+            if (index < images.length && index >= 0) {
+                document.getElementById('image').src = '/static/images/' + images[index].name;
+                document.getElementById('image-name').textContent = images[index].name;
+
+                // 如果已经做出判断，则显示相应状态
+                if (judgments[images[index].name]) {
+                    const judgment = judgments[images[index].name];
+                    if (judgment === 'incorrect') {
+                        document.getElementById('input-box').style.display = 'block';
+                        document.getElementById('user-input').value = judgment.input || '';
+                    } else {
+                        document.getElementById('input-box').style.display = 'none';
+                    }
+                } else {
+                    document.getElementById('input-box').style.display = 'none';
+                }
+            }
+        }
+
+        function handleCorrect() {
+            judgments[images[currentIndex].name] = 'correct';
+            currentIndex++;
+            saveProgress();
+            showImage(currentIndex);
+        }
+
+        function handleIncorrect() {
+            judgments[images[currentIndex].name] = 'incorrect';
+            document.getElementById('input-box').style.display = 'block';
+        }
+
+        function submitInput() {
+            const userInput = document.getElementById('user-input').value;
+            judgments[images[currentIndex].name] = { status: 'incorrect', input: userInput };
+            currentIndex++;
+            saveProgress();
+            showImage(currentIndex);
+        }
+
+        function goBack() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                showImage(currentIndex);
+            }
+        }
+
+        function exitReview() {
+            saveProgress();
+            alert('您已退出评审过程。');
+            window.location.href = '/';  // 退出时返回首页
+        }
+
+        function saveProgress() {
+            const progressData = { index: currentIndex, judgments: judgments };
+            fetch('/save_progress', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(progressData)
+            });
+        }
+
+        function loadProgress() {
+            fetch('/get_progress')
+                .then(response => response.json())
+                .then(data => {
+                    currentIndex = data.index;
+                    judgments = data.judgments;
+                });
+        }
+
+        window.onload = fetchImages;
+    </script>
+</body>
+</html>
+
